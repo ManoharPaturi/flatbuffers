@@ -523,19 +523,20 @@ class Map(Vector):
 
   def __init__(self, buf, byte_width, size=0):
     super().__init__(buf, byte_width, size)
-    # The map size, the key-vector size, and the value-vector size are
-    # stored as three separate fields. In a valid buffer they all agree
-    # (this is what the C++ implementation's verifier enforces); in a
+    # A map stores its element count in the values-vector size prefix
+    # (which Map and Values share) and independently in the key-vector
+    # size prefix; in a valid buffer the two counts agree. In a
     # malformed one they disagree, which previously was accepted
     # silently: zip() truncated Value() to the shorter vector, and
     # __getitem__ could pair a key with the wrong value or read past the
-    # value region.
+    # value region. The same missing invariant was independently
+    # identified in the C++ verifier (#9274); this applies equivalent
+    # protection to the Python reader.
     keys_len = len(self.Keys)
-    values_len = len(self.Values)
-    if keys_len != values_len or keys_len != len(self):
+    if keys_len != len(self):
       raise IndexError(
-          'FlexBuffers: malformed map: size=%d, keys=%d, values=%d must'
-          ' all agree' % (len(self), keys_len, values_len))
+          'FlexBuffers: malformed map: values=%d, keys=%d must agree'
+          % (len(self), keys_len))
 
   @staticmethod
   def CompareKeys(a, b):
