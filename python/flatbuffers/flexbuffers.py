@@ -521,6 +521,22 @@ class TypedVector(Sized):
 class Map(Vector):
   """Data accessor for the encoded map bytes."""
 
+  def __init__(self, buf, byte_width, size=0):
+    super().__init__(buf, byte_width, size)
+    # The map size, the key-vector size, and the value-vector size are
+    # stored as three separate fields. In a valid buffer they all agree
+    # (this is what the C++ implementation's verifier enforces); in a
+    # malformed one they disagree, which previously was accepted
+    # silently: zip() truncated Value() to the shorter vector, and
+    # __getitem__ could pair a key with the wrong value or read past the
+    # value region.
+    keys_len = len(self.Keys)
+    values_len = len(self.Values)
+    if keys_len != values_len or keys_len != len(self):
+      raise IndexError(
+          'FlexBuffers: malformed map: size=%d, keys=%d, values=%d must'
+          ' all agree' % (len(self), keys_len, values_len))
+
   @staticmethod
   def CompareKeys(a, b):
     if isinstance(a, Ref):

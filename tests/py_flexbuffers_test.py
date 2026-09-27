@@ -1594,6 +1594,41 @@ class EncoderTest(unittest.TestCase):
     fbb.Int(420)
     fbb.Finish()
 
+class MalformedMapTest(unittest.TestCase):
+  """A valid map stores the same element count in three places: the map
+  size, the key-vector size, and the value-vector size. The C++
+  implementation's verifier enforces that they agree; the Python reader
+  previously accepted disagreements silently."""
+
+  def _valid_map(self):
+    fbb = flexbuffers.Builder()
+    with fbb.Map():
+      fbb.Int('y', -2)
+      fbb.Int('x', 10)
+    return bytearray(fbb.Finish())
+
+  def test_valid_map_still_loads(self):
+    self.assertEqual(flexbuffers.Loads(bytes(self._valid_map())),
+                     {'x': 10, 'y': -2})
+
+  def test_keys_size_disagreement_rejected(self):
+    data = self._valid_map()
+    data[4] = 3  # key vector now claims one more key than exists
+    with self.assertRaises(IndexError):
+      flexbuffers.GetRoot(bytearray(bytes(data))).AsMap.Value
+
+  def test_map_size_disagreement_rejected(self):
+    data = self._valid_map()
+    data[9] = 3  # map size now exceeds the key/value counts
+    with self.assertRaises(IndexError):
+      flexbuffers.GetRoot(bytearray(bytes(data))).AsMap.Value
+
+  def test_values_size_disagreement_rejected(self):
+    data = self._valid_map()
+    data[7] = 0  # values vector claims zero elements
+    with self.assertRaises(IndexError):
+      flexbuffers.GetRoot(bytearray(bytes(data))).AsMap.Value
+
 
 if __name__ == '__main__':
   unittest.main()
